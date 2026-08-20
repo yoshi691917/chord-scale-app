@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>コード → スケール ファインダー</title>
+<style>
+  :root {
+    --bg: #14161c;
+    --panel: #1d2029;
+    --panel-2: #262a36;
+    --border: #333747;
+    --text: #eef0f5;
+    --text-dim: #9aa0b4;
+    --accent: #7c9cff;
+    --root-color: #ff6b6b;
+    --chord-color: #ffb84d;
+    --scale-color: #5ec8ff;
+    --white-key: #f4f4f6;
+    --black-key: #1a1a1f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+  .sub {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 0 0 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .btn-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  button.chip {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  button.chip:hover { border-color: var(--accent); }
+  button.chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #10121a;
+    font-weight: 600;
+  }
+  #chordSummary {
+    font-size: 15px;
+    margin-top: 12px;
+    color: var(--text-dim);
+  }
+  #chordSummary b { color: var(--text); font-size: 17px; }
+  .legend {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .scale-list { display: flex; flex-direction: column; gap: 6px; }
+  .scale-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .scale-item:hover { border-color: var(--accent); }
+  .scale-item.active { border-color: var(--accent); background: #232840; }
+  .scale-item .notes { color: var(--text-dim); font-size: 12px; }
+  .empty-msg { color: var(--text-dim); font-size: 13px; padding: 8px 0; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tabs button.chip.active { background: var(--scale-color); border-color: var(--scale-color); }
+
+  /* Piano */
+  #piano {
+    position: relative;
+    height: 160px;
+    display: flex;
+    user-select: none;
+    overflow-x: auto;
+  }
+  .white-key {
+    position: relative;
+    flex: 0 0 auto;
+    width: 44px;
+    height: 160px;
+    background: var(--white-key);
+    border: 1px solid #888;
+    border-radius: 0 0 6px 6px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 8px;
+    font-size: 11px;
+    color: #444;
+  }
+  .black-key {
+    position: absolute;
+    top: 0;
+    width: 28px;
+    height: 96px;
+    background: var(--black-key);
+    border: 1px solid #000;
+    border-radius: 0 0 5px 5px;
+    z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 6px;
+    font-size: 10px;
+    color: #ccc;
+  }
+  .key-note { display: none; width: 16px; height: 16px; border-radius: 50%; }
+  .key.hl .key-note { display: block; }
+  .key.root { outline: 3px solid var(--root-color); }
+  .key.chordtone { outline: 3px solid var(--chord-color); }
+  .key.scaletone:not(.root):not(.chordtone) { outline: 3px solid var(--scale-color); }
+
+  /* Guitar */
+  #guitar {
+    overflow-x: auto;
+  }
+  .fretboard {
+    display: grid;
+    grid-template-rows: repeat(6, 34px);
+    gap: 2px;
+    min-width: 900px;
+    background: #3b2a1a;
+    padding: 10px 10px 10px 0;
+    border-radius: 8px;
+  }
+  .string-row { display: grid; grid-template-columns: 50px repeat(16, 1fr); align-items: center; }
+  .open-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    font-weight: 600;
+  }
+  .fret-cell {
+    position: relative;
+    height: 34px;
+    border-right: 2px solid #6b5738;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .fret-cell::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 2px;
+    background: #999;
+    transform: translateY(-50%);
+    z-index: 0;
+  }
+  .fret-cell:first-child { border-right: 4px solid #ddd; }
+  .note-dot {
+    position: relative;
+    z-index: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #10121a;
+  }
+  .note-dot.show { display: flex; }
+  .note-dot.root { background: var(--root-color); }
+  .note-dot.chordtone { background: var(--chord-color); }
+  .note-dot.scaletone { background: var(--scale-color); }
+  .fret-markers {
+    display: grid;
+    grid-template-columns: 50px repeat(16, 1fr);
+    margin-top: 2px;
+  }
+  .fret-markers span {
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<h1>コード → スケール ファインダー</h1>
+<div class="sub">ルート音とコードを選ぶと、そのコードに合うスケールをピアノ/ギターで表示します。</div>
+
+<div class="panel">
+  <h2>ルート音</h2>
+  <div class="btn-grid" id="rootGrid"></div>
+
+  <h2 style="margin-top:16px;">コードタイプ</h2>
+  <div class="btn-grid" id="chordGrid"></div>
+
+  <div id="chordSummary"></div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--root-color)"></span>ルート音</span>
+    <span><span class="dot" style="background:var(--chord-color)"></span>コード構成音</span>
+    <span><span class="dot" style="background:var(--scale-color)"></span>スケール構成音</span>
+  </div>
+</div>
+
+<div class="row">
+  <div class="panel" style="flex: 1; min-width: 280px;">
+    <h2>候補スケール</h2>
+    <div class="scale-list" id="scaleList"></div>
+  </div>
+
+  <div class="panel" style="flex: 2; min-width: 320px;">
+    <div class="tabs">
+      <button class="chip active" id="tabPiano">ピアノ</button>
+      <button class="chip" id="tabGuitar">ギター</button>
+    </div>
+    <div id="pianoView">
+      <div id="piano"></div>
+    </div>
+    <div id="guitarView" style="display:none;">
+      <div id="guitar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+const CHORDS = [
+  {id:'maj',   name:'メジャー (M)',            intervals:[0,4,7]},
+  {id:'min',   name:'マイナー (m)',            intervals:[0,3,7]},
+  {id:'dim',   name:'ディミニッシュ (dim)',      intervals:[0,3,6]},
+  {id:'aug',   name:'オーギュメント (aug)',      intervals:[0,4,8]},
+  {id:'sus2',  name:'サスペンデッド2nd (sus2)',  intervals:[0,2,7]},
+  {id:'sus4',  name:'サスペンデッド4th (sus4)',  intervals:[0,5,7]},
+  {id:'6',     name:'シックス (6)',             intervals:[0,4,7,9]},
+  {id:'m6',    name:'マイナーシックス (m6)',     intervals:[0,3,7,9]},
+  {id:'7',     name:'セブンス (7)',             intervals:[0,4,7,10]},
+  {id:'maj7',  name:'メジャーセブンス (maj7)',   intervals:[0,4,7,11]},
+  {id:'m7',    name:'マイナーセブンス (m7)',     intervals:[0,3,7,10]},
+  {id:'m7b5',  name:'マイナーセブンフラットファイブ (m7♭5)', intervals:[0,3,6,10]},
+  {id:'dim7',  name:'ディミニッシュセブンス (dim7)', intervals:[0,3,6,9]},
+  {id:'add9',  name:'アドナインス (add9)',       intervals:[0,4,7,2]},
+  {id:'9',     name:'ナインス (9)',             intervals:[0,4,7,10,2]},
+  {id:'maj9',  name:'メジャーナインス (maj9)',    intervals:[0,4,7,11,2]},
+  {id:'m9',    name:'マイナーナインス (m9)',      intervals:[0,3,7,10,2]},
+];
+
+const SCALES = [
+  {id:'ionian',           name:'メジャースケール (アイオニアン)',      intervals:[0,2,4,5,7,9,11]},
+  {id:'dorian',           name:'ドリアン',                          intervals:[0,2,3,5,7,9,10]},
+  {id:'phrygian',         name:'フリジアン',                        intervals:[0,1,3,5,7,8,10]},
+  {id:'lydian',           name:'リディアン',                        intervals:[0,2,4,6,7,9,11]},
+  {id:'mixolydian',       name:'ミクソリディアン',                   intervals:[0,2,4,5,7,9,10]},
+  {id:'aeolian',          name:'エオリアン (ナチュラルマイナー)',      intervals:[0,2,3,5,7,8,10]},
+  {id:'locrian',          name:'ロクリアン',                        intervals:[0,1,3,5,6,8,10]},
+  {id:'harmonic_minor',   name:'ハーモニックマイナー',                intervals:[0,2,3,5,7,8,11]},
+  {id:'melodic_minor',    name:'メロディックマイナー',                intervals:[0,2,3,5,7,9,11]},
+  {id:'lydian_dominant',  name:'リディアン・ドミナント (リディアン7th)', intervals:[0,2,4,6,7,9,10]},
+  {id:'altered',          name:'オルタード',                        intervals:[0,1,3,4,6,8,10]},
+  {id:'major_pentatonic', name:'メジャーペンタトニック',              intervals:[0,2,4,7,9]},
+  {id:'minor_pentatonic', name:'マイナーペンタトニック',              intervals:[0,3,5,7,10]},
+  {id:'blues',            name:'ブルーススケール',                   intervals:[0,3,5,6,7,10]},
+  {id:'whole_tone',       name:'ホールトーン',                      intervals:[0,2,4,6,8,10]},
+  {id:'diminished_wh',    name:'ディミニッシュ (Whole-Half)',        intervals:[0,2,3,5,6,8,9,11]},
+  {id:'diminished_hw',    name:'ディミニッシュ (Half-Whole)',        intervals:[0,1,3,4,6,7,9,10]},
+];
+
+let state = {
+  root: 0,
+  chord: 'maj',
+  scale: null, // scale id currently highlighted
+};
+
+function chordDef() { return CHORDS.find(c => c.id === state.chord); }
+function chordNotesSet() {
+  return new Set(chordDef().intervals.map(iv => (state.root + iv) % 12));
+}
+function matchingScales() {
+  const chordIv = chordDef().intervals;
+  return SCALES.filter(s => chordIv.every(iv => s.intervals.includes(iv)));
+}
+function scaleNotesSet(scaleId) {
+  const s = SCALES.find(x => x.id === scaleId);
+  if (!s) return new Set();
+  return new Set(s.intervals.map(iv => (state.root + iv) % 12));
+}
+
+// ---------- UI build: root & chord selectors ----------
+const rootGrid = document.getElementById('rootGrid');
+NOTES.forEach((n, i) => {
+  const b = document.createElement('button');
+  b.className = 'chip' + (i === state.root ? ' active' : '');
+  b.textContent = n;
+  b.onclick = () => { state.root = i; state.scale = null; render(); };
+  b.dataset.idx = i;
+  rootGrid.appendChild(b);
+});
+
+const chordGrid = document.getElementById('chordGrid');
+CHORDS.forEach(c => {
+  const b = document.createElement('button');
+  b.className = 'chip' + (c.id === state.chord ? ' active' : '');
+  b.textContent = c.name;
+  b.onclick = () => { state.chord = c.id; state.scale = null; render(); };
+  b.dataset.id = c.id;
+  chordGrid.appendChild(b);
+});
+
+// ---------- Piano build (2 octaves, C..B x2) ----------
+const WHITE_OFFSETS = [0,2,4,5,7,9,11]; // within an octave, pitch classes of white keys
+const BLACK_AFTER = {0:1, 2:1, 5:1, 7:1, 9:1}; // white-key-index(0..6) -> has black key after it (semitone offsets 1,3,6,8,10)
+
+function buildPiano() {
+  const piano = document.getElementById('piano');
+  piano.innerHTML = '';
+  const octaves = 2;
+  const whiteKeyWidth = 44;
+  let whiteCount = 0;
+  const blackKeys = [];
+
+  for (let oct = 0; oct < octaves; oct++) {
+    WHITE_OFFSETS.forEach((offset, idx) => {
+      const pitchClass = offset;
+      const key = document.createElement('div');
+      key.className = 'white-key key';
+      key.dataset.pc = pitchClass;
+      const dot = document.createElement('div');
+      dot.className = 'key-note';
+      key.appendChild(dot);
+      const label = document.createElement('span');
+      if (offset === 0) label.textContent = 'C' + (oct+1);
+      key.appendChild(label);
+      piano.appendChild(key);
+
+      // black key after this white key?
+      const semitoneAfter = offset + 1;
+      const hasBlack = [0,2,5,7,9].includes(offset); // C,D,F,G,A have a black key right after
+      if (hasBlack) {
+        blackKeys.push({ leftPos: (whiteCount + 1) * whiteKeyWidth - 14, pc: semitoneAfter % 12 });
+      }
+      whiteCount++;
+    });
+  }
+
+  blackKeys.forEach(bk => {
+    const key = document.createElement('div');
+    key.className = 'black-key key';
+    key.style.left = bk.leftPos + 'px';
+    key.dataset.pc = bk.pc;
+    const dot = document.createElement('div');
+    dot.className = 'key-note';
+    key.appendChild(dot);
+    piano.appendChild(key);
+  });
+}
+
+function renderPiano() {
+  const chordSet = chordNotesSet();
+  const scaleSet = state.scale ? scaleNotesSet(state.scale) : new Set();
+  document.querySelectorAll('#piano .key').forEach(key => {
+    const pc = parseInt(key.dataset.pc, 10);
+    key.classList.remove('root','chordtone','scaletone','hl');
+    const dot = key.querySelector('.key-note');
+    let color = null;
+    if (pc === state.root) { key.classList.add('root'); color = 'var(--root-color)'; }
+    else if (chordSet.has(pc)) { key.classList.add('chordtone'); color = 'var(--chord-color)'; }
+    else if (scaleSet.has(pc)) { key.classList.add('scaletone'); color = 'var(--scale-color)'; }
+    if (color) {
+      key.classList.add('hl');
+      dot.style.background = color;
+    }
+  });
+}
+
+// ---------- Guitar build ----------
+const TUNING = [
+  {label:'E', pc: 4},  // low E (string 6)
+  {label:'A', pc: 9},
+  {label:'D', pc: 2},
+  {label:'G', pc: 7},
+  {label:'B', pc: 11},
+  {label:'E', pc: 4},  // high E (string 1)
+];
+const FRET_COUNT = 15;
+
+function buildGuitar() {
+  const guitar = document.getElementById('guitar');
+  guitar.innerHTML = '';
+  const board = document.createElement('div');
+  board.className = 'fretboard';
+
+  // strings from high to low visually (top = high E) is common, but let's do low->high top to bottom (standard tab reading bottom-up is opposite).
+  // We'll display low E at bottom, high E at top for natural "looking at neck" feel.
+  const order = [5,4,3,2,1,0]; // indices into TUNING, high E first (top) down to low E (bottom)
+
+  order.forEach(stringIdx => {
+    const row = document.createElement('div');
+    row.className = 'string-row';
+    const label = document.createElement('div');
+    label.className = 'open-label';
+    label.textContent = TUNING[stringIdx].label;
+    row.appendChild(label);
+
+    for (let fret = 0; fret <= FRET_COUNT; fret++) {
+      const cell = document.createElement('div');
+      cell.className = 'fret-cell';
+      const pc = (TUNING[stringIdx].pc + fret) % 12;
+      const dot = document.createElement('div');
+      dot.className = 'note-dot';
+      dot.dataset.pc = pc;
+      dot.textContent = NOTES[pc];
+      cell.appendChild(dot);
+      row.appendChild(cell);
+    }
+    board.appendChild(row);
+  });
+
+  guitar.appendChild(board);
+
+  const markers = document.createElement('div');
+  markers.className = 'fret-markers';
+  const blank = document.createElement('span');
+  markers.appendChild(blank);
+  for (let fret = 0; fret <= FRET_COUNT; fret++) {
+    const m = document.createElement('span');
+    m.textContent = fret;
+    markers.appendChild(m);
+  }
+  guitar.appendChild(markers);
+}
+
+function renderGuitar() {
+  const chordSet = chordNotesSet();
+  const scaleSet = state.scale ? scaleNotesSet(state.scale) : new Set();
+  document.querySelectorAll('#guitar .note-dot').forEach(dot => {
+    const pc = parseInt(dot.dataset.pc, 10);
+    dot.classList.remove('root','chordtone','scaletone','show');
+    if (pc === state.root) { dot.classList.add('root','show'); }
+    else if (chordSet.has(pc)) { dot.classList.add('chordtone','show'); }
+    else if (scaleSet.has(pc)) { dot.classList.add('scaletone','show'); }
+  });
+}
+
+// ---------- Scale list & summary ----------
+function renderScaleList() {
+  const list = document.getElementById('scaleList');
+  list.innerHTML = '';
+  const scales = matchingScales();
+  if (scales.length === 0) {
+    list.innerHTML = '<div class="empty-msg">一致するスケールが見つかりません。</div>';
+    return;
+  }
+  if (!state.scale || !scales.some(s => s.id === state.scale)) {
+    state.scale = scales[0].id;
+  }
+  scales.forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'scale-item' + (s.id === state.scale ? ' active' : '');
+    const noteNames = s.intervals.map(iv => NOTES[(state.root + iv) % 12]).join(' ');
+    item.innerHTML = `<span>${s.name}</span><span class="notes">${noteNames}</span>`;
+    item.onclick = () => { state.scale = s.id; renderScaleList(); renderPiano(); renderGuitar(); };
+    list.appendChild(item);
+  });
+}
+
+function renderSummary() {
+  const chord = chordDef();
+  const rootName = NOTES[state.root];
+  const chordNoteNames = chord.intervals.map(iv => NOTES[(state.root + iv) % 12]).join(' ');
+  document.getElementById('chordSummary').innerHTML =
+    `選択中のコード: <b>${rootName} ${chord.name}</b> &nbsp;|&nbsp; 構成音: ${chordNoteNames}`;
+}
+
+function render() {
+  document.querySelectorAll('#rootGrid .chip').forEach(b => b.classList.toggle('active', parseInt(b.dataset.idx) === state.root));
+  document.querySelectorAll('#chordGrid .chip').forEach(b => b.classList.toggle('active', b.dataset.id === state.chord));
+  renderSummary();
+  renderScaleList();
+  renderPiano();
+  renderGuitar();
+}
+
+// ---------- Tabs ----------
+document.getElementById('tabPiano').onclick = () => {
+  document.getElementById('tabPiano').classList.add('active');
+  document.getElementById('tabGuitar').classList.remove('active');
+  document.getElementById('pianoView').style.display = '';
+  document.getElementById('guitarView').style.display = 'none';
+};
+document.getElementById('tabGuitar').onclick = () => {
+  document.getElementById('tabGuitar').classList.add('active');
+  document.getElementById('tabPiano').classList.remove('active');
+  document.getElementById('guitarView').style.display = '';
+  document.getElementById('pianoView').style.display = 'none';
+};
+
+// ---------- Init ----------
+buildPiano();
+buildGuitar();
+render();
+</script>
+</body>
+</html>
